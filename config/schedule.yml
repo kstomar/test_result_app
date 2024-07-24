@@ -1,0 +1,9 @@
+eod_calculator:
+  cron: "* * * * *"  # Runs every day at 6:00 PM
+  class: "EodCalculatorJob"
+  queue: default
+
+monthly_average_calculator:
+  cron: "5 18 * * 1"  # Runs every Monday at 6:05 PM
+  class: "MonthlyAverageCalculatorJob"
+  queue: default
