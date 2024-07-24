@@ -1,45 +1,30 @@
 class MonthlyAverageCalculator
   def calculate_and_store_monthly_averages
     return unless run_on_monday_of_third_wednesday_week?
-    DailyResultStat.distinct.pluck(:subject).each do |subject|
-      stats = fetch_stats(subject)
-      next if stats.empty?
 
-      create_monthly_average(subject, stats)
-    end
+    ## I can also do this using ruby code but I have used SQL for optimised solution.
+    daily_results = DailyResultStat.select("subject, ROUND(AVG(daily_low)::numeric, 2) as monthly_avg_low, ROUND(AVG(daily_high)::numeric, 2) as monthly_avg_high, SUM(result_count) as monthly_result_count_used, MAX(date) as date").group(:subject).this_month(fetch_date_range)
+    MonthlyAverage.create(daily_results.as_json)
   end
 
   private
 
-  def fetch_stats(subject)
-    stats = []
-    days = 0
-    result_count = 0
+  def fetch_date_range
+    end_date = Date.today
+    start_date = end_date - 6.days
 
-    while result_count < 200 || stats.size <= 5
-      stat = DailyResultStat.where(subject: subject, date: Date.today - days).first
-      days += 1
-      next unless stat
+    minimum_required_result_count = 200
 
-      stats << stat
-      result_count += stat.result_count
+    while total_result_count(start_date, end_date) < minimum_required_result_count
+      start_date -= 1.day
+      break if start_date <= end_date.beginning_of_month
     end
 
-    stats
+    start_date..end_date
   end
 
-  def create_monthly_average(subject, stats)
-    monthly_avg_low = stats.sum(&:daily_low) / stats.size
-    monthly_avg_high = stats.sum(&:daily_high) / stats.size
-    monthly_result_count_used = stats.sum(&:result_count)
-
-    MonthlyAverage.create(
-      date: Date.today,
-      subject: subject,
-      monthly_avg_low: monthly_avg_low.to_f.round(2),
-      monthly_avg_high: monthly_avg_high.to_f.round(2),
-      monthly_result_count_used: monthly_result_count_used
-    )
+  def total_result_count(start_date, end_date)
+    DailyResultStat.where(date: start_date..end_date).sum(:result_count)
   end
 
   def run_on_monday_of_third_wednesday_week?
@@ -48,9 +33,6 @@ class MonthlyAverageCalculator
 
     third_wednesday = third_wednesday_of_month(today)
     third_wednesday.beginning_of_week == today
-    # third_wednesday_week = third_wednesday.beginning_of_week..third_wednesday.end_of_week
-
-    # third_wednesday_week.cover?(today)
   end
 
   def third_wednesday_of_month(date)
